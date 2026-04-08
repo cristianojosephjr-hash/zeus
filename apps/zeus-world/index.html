@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zeus World</title>
+    <meta
+      name="description"
+      content="Run, remix, and share AI-powered simulations from the Zeus frameworks."
+    />
+    <link
+      rel="icon"
+      href='data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Ctext y=".9em" font-size="90"%3E%E2%9A%A1%3C/text%3E%3C/svg%3E'
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <main class="page">
+      <section class="hero">
+        <p class="kicker">Global Simulation Playground</p>
+        <h1>Zeus World</h1>
+        <p id="hero-loop" class="hero-loop"></p>
+      </section>
+
+      <section class="panel controls">
+        <div class="row">
+          <label for="simulation">Simulation</label>
+          <select id="simulation">
+            <option value="zeus_code">Zeus Code Paradigm</option>
+            <option value="open_multi_agent">Open Multi-Agent Framework</option>
+            <option value="kan_ehrenfest">Physics-Informed KANs</option>
+            <option value="shallow_water_gpu">Multi-GPU Euler Equations</option>
+          </select>
+        </div>
+
+        <div id="parameter-grid" class="parameter-grid"></div>
+
+        <div class="actions">
+          <button id="run-button" class="btn btn-primary">Run Simulation</button>
+          <button id="remix-button" class="btn btn-secondary">Remix Parameters</button>
+          <button id="share-button" class="btn btn-secondary">Copy Share Link</button>
+        </div>
+      </section>
+
+      <section class="panel output">
+        <div class="summary">
+          <h2>Run Summary</h2>
+          <div id="result-metrics" class="metrics"></div>
+        </div>
+        <canvas id="chart" width="960" height="300"></canvas>
+      </section>
+
+      <section class="panel schedule">
+        <h2>Cyclic Iterator Preview</h2>
+        <p>
+          The simulation engine uses cyclic iterators for round-robin scheduling and repeatable remix
+          suggestions.
+        </p>
+        <pre id="cycle-preview"></pre>
+      </section>
+    </main>
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
