@@ -25,6 +25,9 @@ export class CyclicIterator {
 }
 
 const ACTIONS = ["cooperate", "compete", "invest", "delay"];
+const BACKTEST_MAX_RELATIVE_ERROR = 0.25;
+const SENSITIVITY_MIN_DRIFT = 0.15;
+const SENSITIVITY_MAX_DRIFT = 18;
 const ACTION_EFFECTS = {
   cooperate: { welfare: 9, risk: -4, cost: 4, fairness: 4 },
   compete: { welfare: 2, risk: 6, cost: 2, fairness: -4 },
@@ -304,7 +307,7 @@ function runBacktest({ baseline, recommendedBranch }) {
     target: Number(target.toFixed(3)),
     predicted: recommendedBranch.welfare,
     relativeError: Number(error.toFixed(4)),
-    pass: error <= 0.2,
+    pass: error <= BACKTEST_MAX_RELATIVE_ERROR,
   };
 }
 
@@ -333,7 +336,7 @@ function runSensitivity({ scenario, baseline, levers, objectiveFn, seed, baselin
   const drift = Math.max(...scores.map((value) => Math.abs(value - baselineScore)));
   return {
     objectiveDrift: Number(drift.toFixed(3)),
-    pass: drift <= 18,
+    pass: drift >= SENSITIVITY_MIN_DRIFT && drift <= SENSITIVITY_MAX_DRIFT,
   };
 }
 

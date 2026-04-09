@@ -48,6 +48,7 @@ def test_decision_ready_requires_peer_review():
     assert without_review["decision_ready"] is False
     if with_review["backtest"]["pass"] and with_review["sensitivity"]["pass"]:
         assert with_review["decision_ready"] is True
+    assert with_review["sensitivity"]["objective_drift"] > 0.0
 
 
 def test_decision_ready_requires_feasible_recommendation():

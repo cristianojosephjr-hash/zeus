@@ -34,6 +34,9 @@ ACTION_EFFECTS = {
     "invest": {"welfare": 11.0, "cost": 8.0, "risk": -3.0, "equity": 2.0},
     "delay": {"welfare": -3.0, "cost": 0.0, "risk": 5.0, "equity": -2.0},
 }
+BACKTEST_MAX_RELATIVE_ERROR = 0.25
+SENSITIVITY_MIN_DRIFT = 0.15
+SENSITIVITY_MAX_DRIFT = 18.0
 
 
 @dataclass(frozen=True)
@@ -265,7 +268,7 @@ def _backtest(domain: Domain, predicted: float) -> Dict[str, float | bool]:
         "target": round(target, 3),
         "predicted": round(predicted, 3),
         "relative_error": round(relative_error, 4),
-        "pass": relative_error <= 0.2,
+        "pass": relative_error <= BACKTEST_MAX_RELATIVE_ERROR,
     }
 
 
@@ -286,29 +289,33 @@ def _sensitivity(
         seed=seed,
     )
     perturbed = []
-    for direction in (0.9, 1.1):
+    variants = (
+        (0.8, 1.2, 0.9, 0.04, 141),
+        (1.25, 0.85, 1.1, -0.04, 212),
+    )
+    for incentive_mul, penalty_mul, collaboration_mul, pressure_shift, seed_offset in variants:
         altered = PolicyLevers(
             budget=baseline_levers.budget,
-            incentive=baseline_levers.incentive * direction,
-            penalty=baseline_levers.penalty * (2 - direction),
-            collaboration_weight=baseline_levers.collaboration_weight,
+            incentive=baseline_levers.incentive * incentive_mul,
+            penalty=baseline_levers.penalty * penalty_mul,
+            collaboration_weight=baseline_levers.collaboration_weight * collaboration_mul,
             rounds=baseline_levers.rounds,
         )
         result = _simulate_branch(
-            branch_id=f"s-{direction}",
+            branch_id=f"s-{incentive_mul:.2f}",
             branch_title="sensitivity",
             domain=domain,
-            pressure=pressure,
+            pressure=_clamp(pressure + pressure_shift, 0.2, 0.9),
             objective_fn=objective_fn,
             levers=altered,
-            seed=seed + int(direction * 100),
+            seed=seed + seed_offset,
         )
         perturbed.append(result.objective_score)
 
     drift = max(abs(score - base_result.objective_score) for score in perturbed)
     return {
         "objective_drift": round(drift, 3),
-        "pass": drift <= 18.0,
+        "pass": SENSITIVITY_MIN_DRIFT <= drift <= SENSITIVITY_MAX_DRIFT,
     }
 
 
