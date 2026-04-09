@@ -5,3 +5,13 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+.mypy_cache/
+playwright-report/
+test-results/
+.playwright-cli/
+.netlify/
+**/node_modules/
+worker-configuration.d.ts
+.wrangler/
+.wrangler-dry/
