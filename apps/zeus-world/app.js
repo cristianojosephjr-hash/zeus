@@ -1,402 +1,484 @@
-class CyclicIterator {
-  constructor(items) {
-    if (!Array.isArray(items) || items.length === 0) {
-      throw new Error("CyclicIterator requires a non-empty list.");
-    }
-    this.items = items;
-    this.index = 0;
-  }
+import { buildPolicyPack, CyclicIterator, resolveScenarioData, scenarioDefaults } from "./engine.js";
+import { SCENARIO_LIBRARY, SOURCES_2026 } from "./data/curated-2026.js";
 
-  next() {
-    const value = this.items[this.index];
-    this.index = (this.index + 1) % this.items.length;
-    return value;
-  }
-
-  take(count) {
-    const output = [];
-    for (let i = 0; i < count; i += 1) {
-      output.push(this.next());
-    }
-    return output;
-  }
-}
-
-const SIMULATION_CONFIG = {
-  zeus_code: {
-    label: "Zeus Code Paradigm",
-    params: [
-      { key: "omega", label: "Omega", min: 0.1, max: 5.0, step: 0.1, value: 1.2 },
-      { key: "reward", label: "Reward", min: 0.2, max: 5.0, step: 0.1, value: 2.4 },
-      { key: "constraints", label: "Constraints", min: 0.0, max: 2.5, step: 0.1, value: 0.6 },
-      { key: "penalty", label: "Penalty", min: 0.2, max: 3.0, step: 0.1, value: 1.1 },
-    ],
-  },
-  open_multi_agent: {
-    label: "Open Multi-Agent Framework",
-    params: [
-      { key: "agents", label: "Agents", min: 2, max: 12, step: 1, value: 5 },
-      { key: "tasks", label: "Tasks", min: 4, max: 24, step: 1, value: 10 },
-      { key: "rounds", label: "Rounds", min: 1, max: 12, step: 1, value: 4 },
-    ],
-  },
-  kan_ehrenfest: {
-    label: "Physics-Informed KANs",
-    params: [
-      { key: "lambdaPenalty", label: "Lambda", min: 0.2, max: 6, step: 0.1, value: 1.5 },
-      { key: "dt", label: "dt", min: 0.005, max: 0.2, step: 0.005, value: 0.04 },
-      { key: "amplitude", label: "Amplitude", min: 0.1, max: 4, step: 0.1, value: 1.6 },
-    ],
-  },
-  shallow_water_gpu: {
-    label: "Multi-GPU Euler Equations",
-    params: [
-      { key: "ranks", label: "Ranks", min: 1, max: 16, step: 1, value: 4 },
-      { key: "cfl", label: "CFL", min: 0.1, max: 0.9, step: 0.05, value: 0.45 },
-      { key: "steps", label: "Steps", min: 10, max: 200, step: 5, value: 60 },
-    ],
-  },
+const elements = {
+  heroLoop: document.getElementById("hero-loop"),
+  runStatus: document.getElementById("run-status"),
+  dataMode: document.getElementById("data-mode"),
+  scenario: document.getElementById("scenario"),
+  region: document.getElementById("region"),
+  objective: document.getElementById("objective"),
+  budget: document.getElementById("budget"),
+  budgetNumber: document.getElementById("budget-number"),
+  incentive: document.getElementById("incentive"),
+  incentiveNumber: document.getElementById("incentive-number"),
+  penalty: document.getElementById("penalty"),
+  penaltyNumber: document.getElementById("penalty-number"),
+  collaboration: document.getElementById("collaboration"),
+  collaborationNumber: document.getElementById("collaboration-number"),
+  runButton: document.getElementById("run-button"),
+  remixButton: document.getElementById("remix-button"),
+  copyLinkButton: document.getElementById("copy-link-button"),
+  metrics: document.getElementById("metrics"),
+  chart: document.getElementById("chart"),
+  decisionTree: document.getElementById("decision-tree"),
+  payoffHead: document.getElementById("payoff-head"),
+  payoffBody: document.getElementById("payoff-body"),
+  negotiationLog: document.getElementById("negotiation-log"),
+  gateStatus: document.getElementById("gate-status"),
+  checkAssumptions: document.getElementById("check-assumptions"),
+  checkFairness: document.getElementById("check-fairness"),
+  checkRisk: document.getElementById("check-risk"),
+  exportJson: document.getElementById("export-json"),
+  exportMemo: document.getElementById("export-memo"),
+  sources: document.getElementById("sources"),
 };
 
-const heroCopy = new CyclicIterator([
-  "Run simulation loops with deterministic cyclic iterators.",
-  "Remix parameter sets and publish shareable scenario URLs.",
-  "Preview scalable orchestration from AI physics foundations.",
+const chartContext = elements.chart.getContext("2d");
+
+const state = {
+  runResult: null,
+  jobs: {},
+  currentRunId: null,
+  baselineData: null,
+};
+
+const heroMessages = new CyclicIterator([
+  "Model multi-party negotiation with budget, incentive, and penalty levers.",
+  "Compare policy branches with payoff matrices and uncertainty bounds.",
+  "Generate action-ready memos tied to 2026 real-world challenge baselines.",
 ]);
 
-const simulationSelect = document.getElementById("simulation");
-const parameterGrid = document.getElementById("parameter-grid");
-const runButton = document.getElementById("run-button");
-const remixButton = document.getElementById("remix-button");
-const shareButton = document.getElementById("share-button");
-const resultMetrics = document.getElementById("result-metrics");
-const heroLoop = document.getElementById("hero-loop");
-const cyclePreview = document.getElementById("cycle-preview");
-const chart = document.getElementById("chart");
-const chartContext = chart.getContext("2d");
-
-const PARAMETER_STATE = {};
-let latestResult = null;
-
-function initHeroLoop() {
-  heroLoop.textContent = heroCopy.next();
-  window.setInterval(() => {
-    heroLoop.textContent = heroCopy.next();
-  }, 2500);
+function statusLabel(status) {
+  return `Status: ${status}`;
 }
 
-function toNumber(value) {
-  return Number.parseFloat(value);
+function setRunStatus(status) {
+  elements.runStatus.textContent = statusLabel(status);
 }
 
-function createParamCard(param, value) {
-  const card = document.createElement("div");
-  card.className = "parameter-card";
-  const id = `param-${param.key}`;
-  card.innerHTML = `
-    <label for="${id}">${param.label}</label>
-    <input
-      id="${id}"
-      type="range"
-      min="${param.min}"
-      max="${param.max}"
-      step="${param.step}"
-      value="${value}"
-    />
-    <input
-      id="${id}-number"
-      type="number"
-      min="${param.min}"
-      max="${param.max}"
-      step="${param.step}"
-      value="${value}"
-    />
-  `;
-  const slider = card.querySelector(`#${id}`);
-  const number = card.querySelector(`#${id}-number`);
-  slider.addEventListener("input", () => {
-    number.value = slider.value;
-    PARAMETER_STATE[param.key] = toNumber(slider.value);
-  });
-  number.addEventListener("input", () => {
-    slider.value = number.value;
-    PARAMETER_STATE[param.key] = toNumber(number.value);
-  });
-  return card;
+function connectInputPair(rangeInput, numberInput) {
+  const syncFromRange = () => {
+    numberInput.value = rangeInput.value;
+  };
+  const syncFromNumber = () => {
+    rangeInput.value = numberInput.value;
+  };
+  rangeInput.addEventListener("input", syncFromRange);
+  numberInput.addEventListener("input", syncFromNumber);
 }
 
-function loadParameters(simulationType) {
-  parameterGrid.innerHTML = "";
-  const config = SIMULATION_CONFIG[simulationType];
-  config.params.forEach((param) => {
-    PARAMETER_STATE[param.key] = param.value;
-    parameterGrid.appendChild(createParamCard(param, param.value));
-  });
+function loadScenarioDefaults() {
+  const defaults = scenarioDefaults(elements.scenario.value);
+  elements.budget.value = String(defaults.budget);
+  elements.budgetNumber.value = String(defaults.budget);
+  elements.incentive.value = String(defaults.incentive);
+  elements.incentiveNumber.value = String(defaults.incentive);
+  elements.penalty.value = String(defaults.penalty);
+  elements.penaltyNumber.value = String(defaults.penalty);
+  elements.collaboration.value = String(defaults.collaborationWeight);
+  elements.collaborationNumber.value = String(defaults.collaborationWeight);
 }
 
-function finiteDifference(values, dt) {
-  const derivatives = [];
-  for (let i = 0; i < values.length; i += 1) {
-    if (i === 0) {
-      derivatives.push((values[i + 1] - values[i]) / dt);
-    } else if (i === values.length - 1) {
-      derivatives.push((values[i] - values[i - 1]) / dt);
-    } else {
-      derivatives.push((values[i + 1] - values[i - 1]) / (2 * dt));
-    }
-  }
-  return derivatives;
-}
-
-function runZeusCode(params) {
-  const frames = [];
-  for (let step = 0; step < 40; step += 1) {
-    const reward = params.reward + Math.sin(step / 5) * 0.4;
-    const constraints = params.constraints + Math.cos(step / 7) * 0.15;
-    const augmented = reward - params.penalty * constraints;
-    const totalLoss = Math.max(0.001, params.omega * Math.abs(constraints) + (1 / (1 + augmented)));
-    frames.push(totalLoss);
-  }
-  const stability = 1 / (1 + frames.reduce((sum, v) => sum + v, 0) / frames.length);
+function readLevers() {
   return {
-    title: SIMULATION_CONFIG.zeus_code.label,
-    metrics: {
-      "Final Loss": frames[frames.length - 1].toFixed(4),
-      "Mean Loss": (frames.reduce((sum, v) => sum + v, 0) / frames.length).toFixed(4),
-      "Stability Score": stability.toFixed(4),
-    },
-    frames,
+    budget: Number(elements.budget.value),
+    incentive: Number(elements.incentive.value),
+    penalty: Number(elements.penalty.value),
+    collaborationWeight: Number(elements.collaboration.value),
+    rounds: 8,
   };
 }
 
-function runOpenMultiAgent(params) {
-  const agentIds = Array.from({ length: params.agents }, (_, index) => `A${index + 1}`);
-  const taskIds = Array.from({ length: params.tasks }, (_, index) => `T${index + 1}`);
-  const scheduler = new CyclicIterator(agentIds);
-  const assignments = [];
-  for (let i = 0; i < params.tasks * params.rounds; i += 1) {
-    assignments.push(`${scheduler.next()}->${taskIds[i % taskIds.length]}`);
-  }
-  const utilization = new Map();
-  assignments.forEach((pair) => {
-    const [agent] = pair.split("->");
-    utilization.set(agent, (utilization.get(agent) ?? 0) + 1);
-  });
-  const spread = Math.max(...utilization.values()) - Math.min(...utilization.values());
-  return {
-    title: SIMULATION_CONFIG.open_multi_agent.label,
-    metrics: {
-      "Assignments": assignments.length,
-      "Agent Spread": spread,
-      "Cycle Fairness": (1 / (1 + spread)).toFixed(4),
-    },
-    frames: Array.from(utilization.values()),
-    assignmentPreview: assignments.slice(0, 12),
-  };
+function checklistComplete() {
+  return Boolean(
+    elements.checkAssumptions.checked && elements.checkFairness.checked && elements.checkRisk.checked
+  );
 }
 
-function runKanEhrenfest(params) {
-  const points = 50;
-  const yPred = [];
-  const yTarget = [];
-  const commutator = [];
-
-  for (let i = 0; i < points; i += 1) {
-    const t = i * params.dt;
-    yPred.push(params.amplitude * Math.sin(t));
-    yTarget.push(params.amplitude * Math.sin(t + 0.07));
-    commutator.push(params.amplitude * Math.cos(t));
+function updateGateStatus() {
+  const run = state.runResult;
+  if (!run) {
+    elements.gateStatus.textContent = "Decision-ready: no (no run completed)";
+    return;
   }
-
-  const mse = yPred.reduce((sum, v, index) => sum + (v - yTarget[index]) ** 2, 0) / points;
-  const gradient = finiteDifference(yPred, params.dt);
-  const physicsPenalty =
-    gradient.reduce((sum, v, index) => sum + (v - commutator[index]) ** 2, 0) / points;
-
-  return {
-    title: SIMULATION_CONFIG.kan_ehrenfest.label,
-    metrics: {
-      MSE: mse.toFixed(5),
-      "Physics Penalty": physicsPenalty.toFixed(5),
-      "Total Loss": (mse + params.lambdaPenalty * physicsPenalty).toFixed(5),
-    },
-    frames: yPred,
-  };
+  const ready = Boolean(
+    run.backtest.pass &&
+      run.sensitivity.pass &&
+      checklistComplete() &&
+      run.recommendation?.feasible
+  );
+  elements.gateStatus.textContent = `Decision-ready: ${ready ? "yes" : "no"} | `
+    + `Backtest: ${run.backtest.pass ? "pass" : "fail"} | `
+    + `Sensitivity: ${run.sensitivity.pass ? "pass" : "fail"} | `
+    + `Feasibility: ${run.recommendation?.feasible ? "pass" : "fail"} | `
+    + `Peer review: ${checklistComplete() ? "pass" : "pending"}`;
 }
 
-function runShallowWater(params) {
-  const frames = [];
-  let amplitude = 1;
-  for (let i = 0; i < params.steps; i += 1) {
-    amplitude = amplitude * (1 - params.cfl * 0.008) + Math.sin(i / 6) * 0.005 * params.ranks;
-    frames.push(Math.max(0, amplitude));
-  }
-  return {
-    title: SIMULATION_CONFIG.shallow_water_gpu.label,
-    metrics: {
-      Ranks: params.ranks,
-      "Peak Height": Math.max(...frames).toFixed(4),
-      "Final Height": frames[frames.length - 1].toFixed(4),
-    },
-    frames,
-  };
+function metricEntries(result) {
+  return [
+    ["Scenario", SCENARIO_LIBRARY[result.scenario].label],
+    ["Region", result.region],
+    ["Recommended Branch", result.recommendation.title],
+    ["Welfare", result.recommendation.welfare.toFixed(2)],
+    ["Fairness", result.recommendation.fairness.toFixed(2)],
+    ["Risk", result.recommendation.risk.toFixed(2)],
+    ["Cost", result.recommendation.cost.toFixed(2)],
+    ["Confidence", `${result.recommendation.confidence.toFixed(1)}%`],
+    ["Backtest Error", `${(result.backtest.relativeError * 100).toFixed(1)}%`],
+    ["Uncertainty (P10-P90)", `${result.uncertainty.p10Welfare.toFixed(1)}-${result.uncertainty.p90Welfare.toFixed(1)}`],
+  ];
 }
 
-function runSimulation(simulationType, params) {
-  if (simulationType === "zeus_code") {
-    return runZeusCode(params);
-  }
-  if (simulationType === "open_multi_agent") {
-    return runOpenMultiAgent(params);
-  }
-  if (simulationType === "kan_ehrenfest") {
-    return runKanEhrenfest(params);
-  }
-  return runShallowWater(params);
-}
-
-function renderMetrics(metrics) {
-  resultMetrics.innerHTML = "";
-  Object.entries(metrics).forEach(([label, value]) => {
-    const item = document.createElement("article");
-    item.className = "metric";
-    item.innerHTML = `
+function renderMetrics(result) {
+  elements.metrics.innerHTML = "";
+  metricEntries(result).forEach(([label, value]) => {
+    const card = document.createElement("article");
+    card.className = "metric-card";
+    card.innerHTML = `
       <span class="metric-label">${label}</span>
       <span class="metric-value">${value}</span>
     `;
-    resultMetrics.appendChild(item);
+    elements.metrics.appendChild(card);
   });
 }
 
-function drawChart(frames) {
-  chartContext.clearRect(0, 0, chart.width, chart.height);
-  if (!frames.length) {
-    return;
-  }
-  const min = Math.min(...frames);
-  const max = Math.max(...frames);
-  const range = Math.max(0.0001, max - min);
+function drawChart(result) {
+  const ctx = chartContext;
+  const branches = result.branches;
+  const values = branches.map((branch) => branch.objectiveScore);
+  const min = Math.min(...values, result.uncertainty.p10Welfare);
+  const max = Math.max(...values, result.uncertainty.p90Welfare);
+  const range = Math.max(1, max - min);
+  const width = elements.chart.width;
+  const height = elements.chart.height;
   const padding = 30;
 
-  chartContext.strokeStyle = "rgba(255,255,255,0.25)";
-  chartContext.beginPath();
-  chartContext.moveTo(padding, chart.height - padding);
-  chartContext.lineTo(chart.width - padding, chart.height - padding);
-  chartContext.moveTo(padding, padding);
-  chartContext.lineTo(padding, chart.height - padding);
-  chartContext.stroke();
+  ctx.clearRect(0, 0, width, height);
+  ctx.strokeStyle = "rgba(255,255,255,0.28)";
+  ctx.beginPath();
+  ctx.moveTo(padding, height - padding);
+  ctx.lineTo(width - padding, height - padding);
+  ctx.moveTo(padding, padding);
+  ctx.lineTo(padding, height - padding);
+  ctx.stroke();
 
-  chartContext.strokeStyle = "#00e9bf";
-  chartContext.lineWidth = 2;
-  chartContext.beginPath();
-  frames.forEach((value, index) => {
-    const x = padding + (index / (frames.length - 1 || 1)) * (chart.width - padding * 2);
-    const y =
-      chart.height -
-      padding -
-      ((value - min) / range) * (chart.height - padding * 2);
+  const yFromValue = (value) =>
+    height - padding - ((value - min) / range) * (height - padding * 2);
+  const xFromIndex = (index) =>
+    padding + (index / Math.max(1, branches.length - 1)) * (width - padding * 2);
+
+  // Uncertainty band.
+  const yLow = yFromValue(result.uncertainty.p10Welfare);
+  const yHigh = yFromValue(result.uncertainty.p90Welfare);
+  ctx.fillStyle = "rgba(255, 140, 57, 0.22)";
+  ctx.fillRect(padding, yHigh, width - padding * 2, Math.max(2, yLow - yHigh));
+
+  // Objective line.
+  ctx.strokeStyle = "#00ddb5";
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  branches.forEach((branch, index) => {
+    const x = xFromIndex(index);
+    const y = yFromValue(branch.objectiveScore);
     if (index === 0) {
-      chartContext.moveTo(x, y);
+      ctx.moveTo(x, y);
     } else {
-      chartContext.lineTo(x, y);
+      ctx.lineTo(x, y);
     }
   });
-  chartContext.stroke();
-}
+  ctx.stroke();
 
-function runAndRender() {
-  const simulationType = simulationSelect.value;
-  latestResult = runSimulation(simulationType, PARAMETER_STATE);
-  renderMetrics(latestResult.metrics);
-  drawChart(latestResult.frames);
-  const cycleSource =
-    latestResult.assignmentPreview ??
-    new CyclicIterator([
-      "seed-A",
-      "seed-B",
-      "seed-C",
-      "seed-D",
-    ]).take(12);
-  cyclePreview.textContent = cycleSource.join(" | ");
-}
-
-function remixParameters() {
-  const config = SIMULATION_CONFIG[simulationSelect.value];
-  const remixIterator = new CyclicIterator([0.85, 0.95, 1.05, 1.15, 0.9, 1.1]);
-  config.params.forEach((param) => {
-    const modifier = remixIterator.next();
-    const newValue = Math.min(param.max, Math.max(param.min, param.value * modifier));
-    PARAMETER_STATE[param.key] = Number(newValue.toFixed(4));
-  });
-  loadParameters(simulationSelect.value);
-  Object.entries(PARAMETER_STATE).forEach(([key, value]) => {
-    const slider = document.getElementById(`param-${key}`);
-    const number = document.getElementById(`param-${key}-number`);
-    if (slider && number) {
-      slider.value = String(value);
-      number.value = String(value);
-    }
+  // Points and labels.
+  branches.forEach((branch, index) => {
+    const x = xFromIndex(index);
+    const y = yFromValue(branch.objectiveScore);
+    ctx.beginPath();
+    ctx.fillStyle = branch.id === result.recommendedBranchId ? "#ff8c39" : "#35a8ff";
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(241, 247, 255, 0.9)";
+    ctx.font = "12px Space Grotesk";
+    ctx.fillText(branch.id, x - 16, height - 10);
   });
 }
 
-function currentStateToHash() {
-  const payload = {
-    simulation: simulationSelect.value,
-    params: PARAMETER_STATE,
+function renderDecisionTree(result) {
+  elements.decisionTree.innerHTML = "";
+  result.decisionTree.forEach((node) => {
+    const div = document.createElement("div");
+    div.className = `node${node.recommendationPath ? " recommended" : ""}`;
+    div.innerHTML = `
+      <strong>${node.node} · ${node.label}</strong>
+      <div>Welfare: ${node.expectedWelfare.toFixed(2)}</div>
+      <div>Cost: ${node.expectedCost.toFixed(2)}</div>
+      <div>Path: ${node.recommendationPath ? "recommended" : "alternative"}</div>
+    `;
+    elements.decisionTree.appendChild(div);
+  });
+}
+
+function renderPayoffTable(result) {
+  const branchIds = result.branches.map((branch) => branch.id);
+  elements.payoffHead.innerHTML = "";
+  const headRow = document.createElement("tr");
+  headRow.innerHTML = `<th>Stakeholder</th>${branchIds.map((id) => `<th>${id}</th>`).join("")}`;
+  elements.payoffHead.appendChild(headRow);
+
+  elements.payoffBody.innerHTML = "";
+  result.payoffMatrix.forEach((row) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${row.stakeholder}</td>${
+      branchIds.map((id) => `<td>${Number(row[id]).toFixed(2)}</td>`).join("")
+    }`;
+    elements.payoffBody.appendChild(tr);
+  });
+}
+
+function renderNegotiationLog(result) {
+  elements.negotiationLog.textContent = result.negotiationLog.join("\n");
+}
+
+function renderSources(sourceChain) {
+  const chainText = `Data mode chain: ${sourceChain.join(" -> ")}`;
+  const citations = SOURCES_2026.map((source) => `${source.label}: ${source.url}`).join(" | ");
+  elements.sources.textContent = `${chainText}. Sources: ${citations}`;
+}
+
+function renderRunResult(result, sourceChain) {
+  state.runResult = result;
+  renderMetrics(result);
+  drawChart(result);
+  renderDecisionTree(result);
+  renderPayoffTable(result);
+  renderNegotiationLog(result);
+  renderSources(sourceChain);
+  updateGateStatus();
+}
+
+function serializeState() {
+  return {
+    scenario: elements.scenario.value,
+    region: elements.region.value,
+    objective: elements.objective.value,
+    levers: readLevers(),
   };
-  return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
 }
 
-function loadStateFromHash() {
+function updateHash() {
+  const payload = serializeState();
+  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+  window.location.hash = `state=${encoded}`;
+}
+
+function loadHash() {
   if (!window.location.hash.startsWith("#state=")) {
     return;
   }
   try {
     const raw = window.location.hash.replace("#state=", "");
     const decoded = decodeURIComponent(escape(atob(raw)));
-    const state = JSON.parse(decoded);
-    if (!SIMULATION_CONFIG[state.simulation]) {
+    const data = JSON.parse(decoded);
+    if (!SCENARIO_LIBRARY[data.scenario]) {
       return;
     }
-    simulationSelect.value = state.simulation;
-    loadParameters(state.simulation);
-    Object.entries(state.params).forEach(([key, value]) => {
-      if (Object.prototype.hasOwnProperty.call(PARAMETER_STATE, key)) {
-        PARAMETER_STATE[key] = value;
-        const slider = document.getElementById(`param-${key}`);
-        const number = document.getElementById(`param-${key}-number`);
-        if (slider && number) {
-          slider.value = String(value);
-          number.value = String(value);
-        }
-      }
-    });
+    elements.scenario.value = data.scenario;
+    elements.region.value = data.region;
+    elements.objective.value = data.objective;
+    const levers = data.levers ?? {};
+    const defaults = scenarioDefaults(data.scenario);
+    elements.budget.value = String(levers.budget ?? defaults.budget);
+    elements.budgetNumber.value = String(levers.budget ?? defaults.budget);
+    elements.incentive.value = String(levers.incentive ?? defaults.incentive);
+    elements.incentiveNumber.value = String(levers.incentive ?? defaults.incentive);
+    elements.penalty.value = String(levers.penalty ?? defaults.penalty);
+    elements.penaltyNumber.value = String(levers.penalty ?? defaults.penalty);
+    elements.collaboration.value = String(levers.collaborationWeight ?? defaults.collaborationWeight);
+    elements.collaborationNumber.value = String(levers.collaborationWeight ?? defaults.collaborationWeight);
   } catch (error) {
-    console.warn("Unable to load state from URL hash.", error);
+    console.warn("Invalid state hash", error);
   }
 }
 
-simulationSelect.addEventListener("change", () => {
-  loadParameters(simulationSelect.value);
-  runAndRender();
-});
-
-runButton.addEventListener("click", runAndRender);
-remixButton.addEventListener("click", () => {
-  remixParameters();
-  runAndRender();
-});
-shareButton.addEventListener("click", async () => {
-  const hash = currentStateToHash();
-  const url = `${window.location.origin}${window.location.pathname}#state=${hash}`;
-  await navigator.clipboard.writeText(url);
-  shareButton.textContent = "Link Copied";
+function createRunJob(payload) {
+  const runId = `job-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  state.jobs[runId] = { status: "queued", result: null, sourceChain: ["curated"] };
   window.setTimeout(() => {
-    shareButton.textContent = "Copy Share Link";
-  }, 1200);
-});
+    state.jobs[runId].status = "running";
+  }, 260);
+  window.setTimeout(() => {
+    state.jobs[runId].status = "completed";
+    state.jobs[runId].result = payload.result;
+    state.jobs[runId].sourceChain = payload.sourceChain;
+  }, 1180);
+  return runId;
+}
 
-initHeroLoop();
-loadParameters(simulationSelect.value);
-loadStateFromHash();
-runAndRender();
+function pollRun(runId) {
+  setRunStatus("queued");
+  const poller = window.setInterval(() => {
+    const job = state.jobs[runId];
+    if (!job) {
+      window.clearInterval(poller);
+      return;
+    }
+    setRunStatus(job.status);
+    if (job.status === "completed") {
+      window.clearInterval(poller);
+      setRunStatus("completed");
+      renderRunResult(job.result, job.sourceChain);
+    }
+  }, 260);
+}
+
+async function runNegotiation() {
+  updateHash();
+  setRunStatus("queued");
+  const scenario = elements.scenario.value;
+  const region = elements.region.value;
+  const objectiveFn = elements.objective.value;
+  const levers = readLevers();
+  const source = await resolveScenarioData({ scenario, region });
+  elements.dataMode.textContent = `Data: ${source.sourceMode}`;
+  const result = buildPolicyPack({
+    scenario,
+    region,
+    objectiveFn,
+    levers,
+    baseline: source.baseline,
+    seed: Date.now() % 1000,
+    peerChecklistComplete: checklistComplete(),
+  });
+  const runId = createRunJob({ result, sourceChain: source.sourceChain });
+  state.currentRunId = runId;
+  pollRun(runId);
+}
+
+function remixLevers() {
+  const iterator = new CyclicIterator([0.88, 0.93, 1.05, 1.11, 0.96, 1.08]);
+  const edits = [
+    ["budget", "budgetNumber", { min: 120, max: 520 }],
+    ["incentive", "incentiveNumber", { min: 0.3, max: 2.2 }],
+    ["penalty", "penaltyNumber", { min: 0.3, max: 2.2 }],
+    ["collaboration", "collaborationNumber", { min: 0.6, max: 1.8 }],
+  ];
+  edits.forEach(([rangeId, numberId, bounds]) => {
+    const rangeElement = document.getElementById(rangeId);
+    const numberElement = document.getElementById(numberId);
+    const current = Number(rangeElement.value);
+    const next = clamp(current * iterator.next(), bounds.min, bounds.max);
+    rangeElement.value = String(Number(next.toFixed(3)));
+    numberElement.value = String(Number(next.toFixed(3)));
+  });
+}
+
+function exportDecisionJson() {
+  if (!state.runResult) {
+    return;
+  }
+  const payload = {
+    ...state.runResult,
+    checklistComplete: checklistComplete(),
+    exportedAt: new Date().toISOString(),
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${state.runResult.scenario}-${state.runResult.region}-decision.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportMemoPdf() {
+  if (!state.runResult) {
+    return;
+  }
+  const run = state.runResult;
+  const jspdf = window.jspdf;
+  if (!jspdf || !jspdf.jsPDF) {
+    return;
+  }
+  const doc = new jspdf.jsPDF();
+  const lines = [
+    "Zeus World - Action Memo",
+    `Generated: ${new Date().toISOString()}`,
+    `Scenario: ${SCENARIO_LIBRARY[run.scenario].label} (${run.region})`,
+    `Objective: ${run.objectiveFn}`,
+    "",
+    `Recommended Branch: ${run.recommendation.title}`,
+    `Welfare: ${run.recommendation.welfare.toFixed(2)}`,
+    `Fairness: ${run.recommendation.fairness.toFixed(2)}`,
+    `Risk: ${run.recommendation.risk.toFixed(2)}`,
+    `Cost: ${run.recommendation.cost.toFixed(2)}`,
+    `Confidence: ${run.recommendation.confidence.toFixed(1)}%`,
+    "",
+    `Decision Ready: ${run.backtest.pass && run.sensitivity.pass && checklistComplete() && run.recommendation.feasible ? "Yes" : "No"}`,
+    `Backtest Error: ${(run.backtest.relativeError * 100).toFixed(1)}%`,
+    `Sensitivity Drift: ${run.sensitivity.objectiveDrift.toFixed(2)}`,
+    "",
+    "Sources:",
+    ...SOURCES_2026.map((source) => `${source.label} - ${source.url}`),
+  ];
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  let y = 16;
+  lines.forEach((line) => {
+    const wrapped = doc.splitTextToSize(line, 176);
+    doc.text(wrapped, 14, y);
+    y += wrapped.length * 6;
+    if (y > 275) {
+      doc.addPage();
+      y = 18;
+    }
+  });
+  doc.save(`${run.scenario}-${run.region}-action-memo.pdf`);
+}
+
+async function copyScenarioLink() {
+  updateHash();
+  await navigator.clipboard.writeText(window.location.href);
+  elements.copyLinkButton.textContent = "Link Copied";
+  window.setTimeout(() => {
+    elements.copyLinkButton.textContent = "Copy Scenario Link";
+  }, 1000);
+}
+
+function setupHeroLoop() {
+  elements.heroLoop.textContent = heroMessages.next();
+  window.setInterval(() => {
+    elements.heroLoop.textContent = heroMessages.next();
+  }, 2600);
+}
+
+function bindEvents() {
+  connectInputPair(elements.budget, elements.budgetNumber);
+  connectInputPair(elements.incentive, elements.incentiveNumber);
+  connectInputPair(elements.penalty, elements.penaltyNumber);
+  connectInputPair(elements.collaboration, elements.collaborationNumber);
+
+  elements.scenario.addEventListener("change", () => {
+    loadScenarioDefaults();
+    updateHash();
+  });
+  elements.region.addEventListener("change", updateHash);
+  elements.objective.addEventListener("change", updateHash);
+  elements.runButton.addEventListener("click", runNegotiation);
+  elements.remixButton.addEventListener("click", remixLevers);
+  elements.copyLinkButton.addEventListener("click", copyScenarioLink);
+  elements.exportJson.addEventListener("click", exportDecisionJson);
+  elements.exportMemo.addEventListener("click", exportMemoPdf);
+  [elements.checkAssumptions, elements.checkFairness, elements.checkRisk].forEach((checkbox) => {
+    checkbox.addEventListener("change", updateGateStatus);
+  });
+}
+
+function init() {
+  setupHeroLoop();
+  loadScenarioDefaults();
+  loadHash();
+  bindEvents();
+  updateGateStatus();
+}
+
+init();

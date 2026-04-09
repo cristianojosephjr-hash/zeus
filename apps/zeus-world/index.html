@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Zeus World</title>
+    <title>Zeus World | Strategic Decision Lab</title>
     <meta
       name="description"
-      content="Run, remix, and share AI-powered simulations from the Zeus frameworks."
+      content="2026 strategic simulation lab for water, mobility, and health policy decisions with game-theory negotiation."
     />
     <link
       rel="icon"
@@ -21,52 +21,126 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
+    <div class="glow g1"></div>
+    <div class="glow g2"></div>
     <main class="page">
-      <section class="hero">
-        <p class="kicker">Global Simulation Playground</p>
-        <h1>Zeus World</h1>
-        <p id="hero-loop" class="hero-loop"></p>
-      </section>
+      <header class="hero panel">
+        <div>
+          <p class="kicker">2026 Real-World Policy Sandbox</p>
+          <h1>Zeus Strategic Decision Lab</h1>
+          <p id="hero-loop" class="hero-loop"></p>
+        </div>
+        <div class="hero-meta">
+          <span id="run-status" class="badge">Status: idle</span>
+          <span id="data-mode" class="badge">Data: curated</span>
+        </div>
+      </header>
 
       <section class="panel controls">
-        <div class="row">
-          <label for="simulation">Simulation</label>
-          <select id="simulation">
-            <option value="zeus_code">Zeus Code Paradigm</option>
-            <option value="open_multi_agent">Open Multi-Agent Framework</option>
-            <option value="kan_ehrenfest">Physics-Informed KANs</option>
-            <option value="shallow_water_gpu">Multi-GPU Euler Equations</option>
-          </select>
+        <h2>Scenario Configuration</h2>
+        <div class="grid two">
+          <label class="field">
+            <span>Flagship Scenario</span>
+            <select id="scenario">
+              <option value="water">Water Allocation</option>
+              <option value="mobility">Urban Mobility</option>
+              <option value="health">Public Health Surge</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Region Preset</span>
+            <select id="region">
+              <option value="US">United States</option>
+              <option value="India">India</option>
+            </select>
+          </label>
         </div>
 
-        <div id="parameter-grid" class="parameter-grid"></div>
+        <div class="grid three">
+          <label class="field">
+            <span>Budget Cap</span>
+            <input id="budget" type="range" min="120" max="520" step="10" />
+            <input id="budget-number" type="number" min="120" max="520" step="10" />
+          </label>
+          <label class="field">
+            <span>Incentive Strength</span>
+            <input id="incentive" type="range" min="0.3" max="2.2" step="0.05" />
+            <input id="incentive-number" type="number" min="0.3" max="2.2" step="0.05" />
+          </label>
+          <label class="field">
+            <span>Penalty Strength</span>
+            <input id="penalty" type="range" min="0.3" max="2.2" step="0.05" />
+            <input id="penalty-number" type="number" min="0.3" max="2.2" step="0.05" />
+          </label>
+        </div>
+
+        <div class="grid two">
+          <label class="field">
+            <span>Collaboration Weight</span>
+            <input id="collaboration" type="range" min="0.6" max="1.8" step="0.05" />
+            <input id="collaboration-number" type="number" min="0.6" max="1.8" step="0.05" />
+          </label>
+          <label class="field">
+            <span>Objective Function</span>
+            <select id="objective">
+              <option value="welfare_cost_cap">Welfare with Cost Cap</option>
+              <option value="profit_risk_floor">Profit with Risk Floor</option>
+              <option value="equity_viability_floor">Equity with Viability Floor</option>
+            </select>
+          </label>
+        </div>
 
         <div class="actions">
-          <button id="run-button" class="btn btn-primary">Run Simulation</button>
-          <button id="remix-button" class="btn btn-secondary">Remix Parameters</button>
-          <button id="share-button" class="btn btn-secondary">Copy Share Link</button>
+          <button id="run-button" class="btn primary">Run Negotiation</button>
+          <button id="remix-button" class="btn">Remix Levers</button>
+          <button id="copy-link-button" class="btn">Copy Scenario Link</button>
         </div>
+      </section>
+
+      <section class="panel governance">
+        <h2>Decision-Ready Gate</h2>
+        <p>A run is marked decision-ready only when backtest, sensitivity, and peer checklist conditions all pass.</p>
+        <div class="checklist">
+          <label><input type="checkbox" id="check-assumptions" /> Assumptions verified by policy reviewer</label>
+          <label><input type="checkbox" id="check-fairness" /> Fairness impact discussed with stakeholders</label>
+          <label><input type="checkbox" id="check-risk" /> Risk mitigation plan attached</label>
+        </div>
+        <p id="gate-status" class="gate">Decision-ready: no</p>
       </section>
 
       <section class="panel output">
-        <div class="summary">
-          <h2>Run Summary</h2>
-          <div id="result-metrics" class="metrics"></div>
-        </div>
-        <canvas id="chart" width="960" height="300"></canvas>
+        <h2>Recommendation Summary</h2>
+        <div id="metrics" class="metrics"></div>
+        <canvas id="chart" width="1024" height="280"></canvas>
       </section>
 
-      <section class="panel schedule">
-        <h2>Cyclic Iterator Preview</h2>
-        <p>
-          The simulation engine uses cyclic iterators for round-robin scheduling and repeatable remix
-          suggestions.
-        </p>
-        <pre id="cycle-preview"></pre>
+      <section class="panel matrix">
+        <h2>Decision Tree and Payoff Matrix</h2>
+        <div id="decision-tree" class="tree"></div>
+        <div class="table-wrap">
+          <table id="payoff-table">
+            <thead id="payoff-head"></thead>
+            <tbody id="payoff-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel logs">
+        <h2>Negotiation Log (Cyclic Execution)</h2>
+        <pre id="negotiation-log"></pre>
+      </section>
+
+      <section class="panel exports">
+        <h2>Action Artifacts</h2>
+        <div class="actions">
+          <button id="export-json" class="btn">Download Decision JSON</button>
+          <button id="export-memo" class="btn primary">Download Action Memo PDF</button>
+        </div>
+        <p id="sources"></p>
       </section>
     </main>
-    <script src="./app.js" type="module"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script type="module" src="./app.js"></script>
   </body>
 </html>
